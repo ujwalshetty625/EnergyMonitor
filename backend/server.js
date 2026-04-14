@@ -86,20 +86,30 @@ app.get("/api/data", (req, res) => {
 // Body: { current: 3.5 }
 // -----------------------------------------------------------
 app.post("/api/data", (req, res) => {
-  const { current } = req.body;
+  // Support Raspberry Pi payload along with backward compatibility
+  let { current, device_id, value, timestamp, status } = req.body;
+
+  if (current === undefined && value !== undefined) {
+    current = value;
+  }
 
   if (current === undefined || isNaN(current)) {
     return res.status(400).json({
       success: false,
-      message: 'Invalid request. Provide { "current": <number> }',
+      message: 'Invalid request. Provide { "value": <number> }',
     });
   }
 
   const newReading = {
     id: Date.now(),
     current: parseFloat(parseFloat(current).toFixed(2)),
-    timestamp: new Date().toISOString(),
-    anomaly: detectAnomaly(parseFloat(current)),
+    // Optional: if your Pi sends a UNIX timestamp in seconds, convert it. Otherwise default to string.
+    timestamp: timestamp 
+      ? (timestamp > 9999999999 ? new Date(timestamp).toISOString() : new Date(timestamp * 1000).toISOString()) 
+      : new Date().toISOString(),
+    anomaly: status === "theft" || detectAnomaly(parseFloat(current)),
+    device_id: device_id || "simulated",
+    status: status || "normal"
   };
 
   readings.push(newReading);
@@ -123,8 +133,8 @@ app.get("/api/health", (req, res) => {
 // -----------------------------------------------------------
 // Start server
 // -----------------------------------------------------------
-app.listen(PORT, () => {
-  console.log(`\n✅  Energy backend running at http://localhost:${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`\n✅  Energy backend running at http://0.0.0.0:${PORT}`);
   console.log(`   GET  http://localhost:${PORT}/api/data`);
   console.log(`   POST http://localhost:${PORT}/api/data`);
   console.log(`   GET  http://localhost:${PORT}/api/health\n`);
