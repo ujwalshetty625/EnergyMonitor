@@ -142,7 +142,7 @@ function MiniGraph({ history }) {
       {/* Data points */}
       {history.map((r, i) => (
         <circle
-          key={r.id}
+          key={`${r.timestamp}-${i}`}
           cx={toX(i)}
           cy={toY(r.current)}
           r={4}
