@@ -1,141 +1,147 @@
-const express = require("express");
-const cors = require("cors");
+import cors from "cors";
+import express from "express";
+import { execFile } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const app = express();
-const PORT = 5001;
+const PORT = process.env.PORT || 4000;
+
+// Paths (ML)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const projectRoot = path.resolve(__dirname, "..");
+const mlScript = path.join(projectRoot, "ml", "model.py");
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
-// -----------------------------------------------------------
-// Configuration
-// -----------------------------------------------------------
- // kW — anything above this is flagged as theft
-function detectAnomaly(current) {
-  return false;
-}
-// -----------------------------------------------------------
-// In-memory data store
-// We keep the last 50 readings in memory (no database needed)
-// -----------------------------------------------------------
-const readings = [];
+// 🔥 ML FUNCTION
+function runMlScript(data, newValue) {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify({ data, new_value: newValue });
 
-// -----------------------------------------------------------
-// Helper: generate a simulated energy reading
-// -----------------------------------------------------------
+    execFile("python", [mlScript, payload], (error, stdout, stderr) => {
+      if (error) {
+        return reject(new Error(stderr?.trim() || error.message));
+      }
+      try {
+        resolve(JSON.parse(stdout.trim()));
+      } catch {
+        reject(new Error("Invalid ML response"));
+      }
+    });
+  });
+}
+
+// ─────────────────────────────
+// 📊 IoT SIMULATION (MERGED)
+// ─────────────────────────────
+const readings = [];
+const ANOMALY_THRESHOLD = 5.0;
+
 function generateReading() {
-  // 90% of the time produce normal consumption (1–4.5 kW)
-  // 10% of the time spike above threshold to simulate theft (5.1–9 kW)
   const isTheft = Math.random() < 0.1;
   const current = isTheft
-    ? parseFloat((5.1 + Math.random() * 3.9).toFixed(2))
-    : parseFloat((1 + Math.random() * 3.5).toFixed(2));
+    ? +(5.1 + Math.random() * 3.9).toFixed(2)
+    : +(1 + Math.random() * 3.5).toFixed(2);
 
   return {
     id: Date.now(),
-    current,                          // kW
+    current,
     timestamp: new Date().toISOString(),
-    anomaly: detectAnomaly(current),
+    anomaly: current > ANOMALY_THRESHOLD,
   };
 }
 
-// -----------------------------------------------------------
-// Seed with 20 historical readings on startup
-// -----------------------------------------------------------
+// Seed data
 for (let i = 20; i >= 1; i--) {
-  const reading = generateReading();
-  // Adjust timestamp so history looks spread over the last 20 minutes
-  reading.timestamp = new Date(Date.now() - i * 60 * 1000).toISOString();
-  readings.push(reading);
+  const r = generateReading();
+  r.timestamp = new Date(Date.now() - i * 60000).toISOString();
+  readings.push(r);
 }
 
-// -----------------------------------------------------------
-// Auto-generate a new reading every 5 seconds
-// (simulates real IoT sensor sending data)
-// -----------------------------------------------------------
+// Auto IoT
 setInterval(() => {
-  const newReading = generateReading();
-  readings.push(newReading);
-  // Keep only last 50 readings
+  const r = generateReading();
+  readings.push(r);
   if (readings.length > 50) readings.shift();
-  console.log(
-    `[${newReading.timestamp}] current=${newReading.current} kW  anomaly=${newReading.anomaly}`
-  );
 }, 5000);
 
-// -----------------------------------------------------------
-// GET /api/data
-// Returns the latest energy reading + last 20 readings for graph
-// -----------------------------------------------------------
-app.get("/api/data", (req, res) => {
-  const latest = readings[readings.length - 1];
-  const history = readings.slice(-20); // last 20 for the trend graph
+// ─────────────────────────────
+// ROUTES
+// ─────────────────────────────
 
+// Health
+app.get("/api/health", (_req, res) => {
   res.json({
-    success: true,
-    latest,
-    history,
-    totalReadings: readings.length,
+    ok: true,
+    uptime: process.uptime().toFixed(1) + "s",
   });
 });
 
-// -----------------------------------------------------------
-// POST /api/data
-// Accepts a reading from external source (e.g. BeagleBoard later)
-// Body: { current: 3.5 }
-// -----------------------------------------------------------
-app.post("/api/data", (req, res) => {
-  // Support Raspberry Pi payload along with backward compatibility
-  let { current, device_id, value, timestamp, status } = req.body;
+// GET data
+app.get("/api/data", (_req, res) => {
+  res.json({
+    success: true,
+    latest: readings[readings.length - 1],
+    history: readings.slice(-20),
+  });
+});
 
-  if (current === undefined && value !== undefined) {
-    current = value;
+// POST data
+app.post("/api/data", (req, res) => {
+  const { current } = req.body;
+
+  if (typeof current !== "number") {
+    return res.status(400).json({ error: "Invalid current" });
   }
 
-  if (current === undefined || isNaN(current)) {
+  const r = {
+    id: Date.now(),
+    current,
+    timestamp: new Date().toISOString(),
+    anomaly: current > ANOMALY_THRESHOLD,
+  };
+
+  readings.push(r);
+  if (readings.length > 50) readings.shift();
+
+  res.json({ success: true, data: r });
+});
+
+// 🔥 ML ROUTE
+app.post("/api/anomaly", async (req, res) => {
+  const { data, new_value } = req.body ?? {};
+
+  if (
+    !Array.isArray(data) ||
+    data.length !== 5 ||
+    typeof new_value !== "number"
+  ) {
     return res.status(400).json({
       success: false,
-      message: 'Invalid request. Provide { "value": <number> }',
+      error: "Invalid input format",
     });
   }
 
-  const newReading = {
-    id: Date.now(),
-    current: parseFloat(parseFloat(current).toFixed(2)),
-    // Optional: if your Pi sends a UNIX timestamp in seconds, convert it. Otherwise default to string.
-    timestamp: timestamp 
-      ? (timestamp > 9999999999 ? new Date(timestamp).toISOString() : new Date(timestamp * 1000).toISOString()) 
-      : new Date().toISOString(),
-    anomaly: status === "theft" || detectAnomaly(parseFloat(current)),
-    device_id: device_id || "simulated",
-    status: status || "normal"
-  };
+  try {
+    const result = await runMlScript(data, new_value);
 
-  readings.push(newReading);
-  if (readings.length > 50) readings.shift();
-
-  console.log(`[POST] Received reading: ${JSON.stringify(newReading)}`);
-
-  res.status(201).json({
-    success: true,
-    data: newReading,
-  });
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      ...result,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: err.message,
+    });
+  }
 });
 
-// -----------------------------------------------------------
-// GET /api/health  (simple health check)
-// -----------------------------------------------------------
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", uptime: process.uptime().toFixed(1) + "s" });
-});
-
-// -----------------------------------------------------------
-// Start server
-// -----------------------------------------------------------
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`\n✅  Energy backend running at http://0.0.0.0:${PORT}`);
-  console.log(`   GET  http://localhost:${PORT}/api/data`);
-  console.log(`   POST http://localhost:${PORT}/api/data`);
-  console.log(`   GET  http://localhost:${PORT}/api/health\n`);
+app.listen(PORT, () => {
+  console.log(`🚀 Backend running at http://localhost:${PORT}`);
 });
