@@ -1,3 +1,4 @@
+
 require("dotenv").config();
 
 const express = require("express");
@@ -40,6 +41,13 @@ function validateSecurityConfiguration() {
     console.warn(`⚠️  ${message}`);
   }
 }
+const { execFile } = require("child_process");
+const path = require("path");
+
+// Paths (ML)
+const projectRoot = path.resolve(__dirname, "..");
+const mlScript = path.join(projectRoot, "ml", "model.py");
+
 
 // Middleware
 app.use(cors());
@@ -148,19 +156,41 @@ mongoose.connect(MONGODB_URI, {
     console.log("   Using in-memory fallback\n");
   });
 
+
+// 🔥 ML FUNCTION
+function runMlScript(data, newValue) {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify({ data, new_value: newValue });
+
+    execFile("python", [mlScript, payload], (error, stdout, stderr) => {
+      if (error) {
+        return reject(new Error(stderr?.trim() || error.message));
+      }
+      try {
+        resolve(JSON.parse(stdout.trim()));
+      } catch {
+        reject(new Error("Invalid ML response"));
+      }
+    });
+  });
+}
+
 // -----------------------------------------------------------
 // In-memory fallback for when MongoDB is not connected
 // -----------------------------------------------------------
 const readings = [];
+const ANOMALY_THRESHOLD = 5.0;
 
 // Helper: generate a simulated energy reading
+
 function generateReading() {
   const isTheft = Math.random() < 0.1;
   const current = isTheft
-    ? parseFloat((5.1 + Math.random() * 3.9).toFixed(2))
-    : parseFloat((1 + Math.random() * 3.5).toFixed(2));
+    ? +(5.1 + Math.random() * 3.9).toFixed(2)
+    : +(1 + Math.random() * 3.5).toFixed(2);
 
   return {
+
     current,
     voltage: 230,
     timestamp: new Date().toISOString(),
@@ -495,4 +525,39 @@ function startServer(preferredPort) {
   });
 }
 
+// -----------------------------------------------------------
+// POST /api/anomaly - ML-based anomaly detection
+// -----------------------------------------------------------
+app.post("/api/anomaly", async (req, res) => {
+  const { data, new_value } = req.body ?? {};
+
+  if (
+    !Array.isArray(data) ||
+    data.length !== 5 ||
+    typeof new_value !== "number"
+  ) {
+    return res.status(400).json({
+      success: false,
+      error: "Invalid input format",
+    });
+  }
+
+  try {
+    const result = await runMlScript(data, new_value);
+
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      ...result,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: err.message,
+    });
+  }
+});
+
+
 startServer(PORT);
+

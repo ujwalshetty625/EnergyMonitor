@@ -1,5 +1,12 @@
+<<<<<<< HEAD
 node_modules
 dist
 .env.DS_Store
 .DS_Store
 .DS_Store
+=======
+node_modules/
+ml/artifacts/
+.env
+dist/
+>>>>>>> bba8411 (feat: complete AI energy theft detection system (ML + backend + frontend + IoT simulation))
