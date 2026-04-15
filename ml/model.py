@@ -200,13 +200,15 @@ def infer(data: np.ndarray, new_value: float) -> dict:
     x             = norm_data.reshape(1, WINDOW, 1)
     norm_predicted = float(model.predict(x, verbose=0)[0][0])
 
-    # Error in normalised space (consistent with threshold)
-    norm_error = float(abs(norm_predicted - norm_new_value))
+    # For Energy Theft, we only flag unexpected *increases* in load (spikes).
+    # We ignore random drops by using directional error instead of absolute variance.
+    directional_error = float(norm_new_value - norm_predicted)
+    norm_error = max(0.0, directional_error)
     is_anomaly = norm_error > threshold
 
     # Denormalise prediction for human-readable output
     predicted_kw = float(norm_predicted * (sigma + 1e-8) + mu)
-    error_kw     = float(abs(predicted_kw - new_value))
+    error_kw     = max(0.0, float(new_value - predicted_kw))
 
     # Confidence: 0.0 = definitely normal, 1.0 = definitely anomaly
     confidence = round(min(1.0, norm_error / (threshold + 1e-8)), 4)

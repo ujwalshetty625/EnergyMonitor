@@ -1,0 +1,14 @@
+# FUTURE IMPROVEMENTS ROADMAP
+Energy Monitoring & Theft Detection System
+
+1. Alert Notifications (Email/SMS)
+Integrate Twilio or SendGrid APIs. When the Machine Learning LSTM model triggers a high-confidence anomaly alert, instantly automatically dispatch an SMS or Email alert to the administrator or homeowner with the exact timestamp, meter ID, and spike value.
+
+2. Historical Data Analytics (New Page)
+Build a "Historical Reports" page in the React frontend. Query the MongoDB Atlas cluster to visualize historical energy consumption data across scalable timelines (7 days, 30 days, 1 year) and provide an overlay of anomaly frequency trends.
+
+3. Dynamic Edge Device Provisioning (Add New Device)
+Activate the currently disabled "Add New Device" UI. Create a backend registration route for administrators to add new IoT nodes mechanically. Generate secure METER_API_KEY and HMAC signatures automatically on the backend to facilitate highly secure, scalable multi-node architecture.
+
+4. Continuous AI Model Retraining Pipeline
+Develop a fully automated MLOps pipeline. Write a script that routinely scrapes the validated historical consumption data from the MongoDB database, sanitizes it, and retrains the TensorFlow LSTM model. This ensures the model dynamically adapts to real-world behavioral changes rather than relying on synthetic initial data.
