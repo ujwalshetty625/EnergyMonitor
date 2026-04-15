@@ -1,53 +1,49 @@
-import { NavLink } from "react-router-dom";
-import { Activity, LayoutDashboard, Zap } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
 
 export default function Navbar() {
-  const getStyle = ({ isActive }) => ({
-    display: "flex", alignItems: "center", gap: "8px", 
-    padding: "8px 16px", borderRadius: "8px",
-    textDecoration: "none", fontWeight: isActive ? 600 : 500,
-    backgroundColor: isActive ? "#ebf5fb" : "transparent",
-    color: isActive ? "#2980b9" : "#555",
-    transition: "background 0.2s"
-  });
+  const location = useLocation();
 
   return (
-    <nav style={styles.nav}>
-      <div style={styles.container}>
-        <div style={styles.flex}>
-          <div style={styles.logoFlex}>
-            <div style={styles.logoIcon}>
-              <Zap size={20} color="#fff" />
-            </div>
-            <span style={styles.logoText}>EnergyMonitor</span>
+    <nav className="sticky top-0 z-50 backdrop-blur bg-gray-950/80 border-b border-gray-800">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        
+        {/* Logo */}
+        <div className="flex items-center gap-2">
+          <div className="bg-indigo-500/20 p-2 rounded-lg border border-indigo-500/30">
+            ⚡
           </div>
-          <div style={styles.flex}>
-            <NavLink to="/" style={getStyle}>
-              <LayoutDashboard size={18} />
-              <span>Dashboard</span>
-            </NavLink>
-            <NavLink to="/monitor" style={getStyle}>
-              <Activity size={18} />
-              <span>Live Monitor</span>
-            </NavLink>
-          </div>
+          <span className="text-lg font-semibold text-gray-100">
+            EnergyMonitor
+          </span>
+        </div>
+
+        {/* Links */}
+        <div className="flex items-center gap-2">
+
+          <Link
+            to="/"
+            className={`px-4 py-2 rounded-lg text-sm transition-all ${
+              location.pathname === "/"
+                ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
+                : "text-gray-400 hover:text-white hover:bg-gray-800"
+            }`}
+          >
+            Dashboard
+          </Link>
+
+          <Link
+            to="/monitor"
+            className={`px-4 py-2 rounded-lg text-sm transition-all ${
+              location.pathname === "/monitor"
+                ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
+                : "text-gray-400 hover:text-white hover:bg-gray-800"
+            }`}
+          >
+            Live Monitor
+          </Link>
+
         </div>
       </div>
     </nav>
   );
 }
-
-const styles = {
-  nav: {
-    backgroundColor: "#ffffff",
-    borderBottom: "1px solid #e2e8f0",
-    position: "sticky",
-    top: 0,
-    zIndex: 50
-  },
-  container: { maxWidth: 1100, margin: "0 auto", padding: "0 16px" },
-  flex: { display: "flex", justifyContent: "space-between", alignItems: "center", height: "64px", gap: "10px" },
-  logoFlex: { display: "flex", alignItems: "center", gap: "10px" },
-  logoIcon: { backgroundColor: "#3498db", padding: "6px", borderRadius: "8px", display: "flex" },
-  logoText: { fontWeight: 700, fontSize: "1.25rem", color: "#1e293b", letterSpacing: "-0.5px" }
-};
