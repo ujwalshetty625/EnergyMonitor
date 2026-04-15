@@ -1,4 +1,5 @@
 import "dotenv/config";
+import securityMiddleware from "./middleware/security.js";
 import express from "express";
 import cors from "cors";
 import mongoose from "mongoose";
@@ -216,7 +217,7 @@ app.post("/api/data", async (req, res) => {
   res.status(201).json({ success: true, data: saved });
 });
 
-app.post("/api/meter/data", async (req, res) => {
+app.post("/api/meter/data", securityMiddleware, async (req, res) => {
   const verification = verifyMeterRequest(req);
   if (!verification.ok) return res.status(401).json({ error: verification.message });
   
